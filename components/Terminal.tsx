@@ -15,7 +15,10 @@ const Terminal: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Auto-scroll to bottom when messages update (including during streaming)
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,9 +36,34 @@ const Terminal: React.FC = () => {
       .filter(m => m.role !== 'system')
       .map(m => ({ role: m.role as 'user'|'model', text: m.text }));
 
-    const responseText = await sendMessageToAgent(history, userMsg);
+    // Add empty model message that we'll update as chunks arrive
+    setMessages(prev => [...prev, { role: 'model', text: '', isTyping: true }]);
 
-    setMessages(prev => [...prev, { role: 'model', text: responseText }]);
+    let accumulatedText = '';
+
+    await sendMessageToAgent(history, userMsg, (chunk: string) => {
+      accumulatedText += chunk;
+      // Update the last message (which should be the model's response) with accumulated text
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const lastIndex = newMessages.length - 1;
+        if (newMessages[lastIndex] && newMessages[lastIndex].role === 'model') {
+          newMessages[lastIndex] = { ...newMessages[lastIndex], text: accumulatedText, isTyping: true };
+        }
+        return newMessages;
+      });
+    });
+
+    // Mark as complete
+    setMessages(prev => {
+      const newMessages = [...prev];
+      const lastIndex = newMessages.length - 1;
+      if (newMessages[lastIndex] && newMessages[lastIndex].role === 'model') {
+        newMessages[lastIndex] = { ...newMessages[lastIndex], isTyping: false };
+      }
+      return newMessages;
+    });
+
     setLoading(false);
   };
 
@@ -66,14 +94,12 @@ const Terminal: React.FC = () => {
             }`}>
               {msg.role === 'model' && <span className="mr-2">{'>'}</span>}
               {msg.text}
+              {msg.isTyping && msg.role === 'model' && (
+                <span className="inline-block w-2 h-4 bg-accent ml-1 animate-pulse" />
+              )}
             </span>
           </div>
         ))}
-        {loading && (
-           <div className="text-left">
-             <span className="text-accent animate-pulse">{'>'} PROCESSING_REQUEST...</span>
-           </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 
