@@ -9,6 +9,7 @@ const PPHWidget: React.FC = () => {
     <html lang="en">
       <head>
         <meta charset="UTF-8">
+        <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
         <style>
           body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
           /* Ensure the widget container fits */
@@ -27,6 +28,36 @@ const PPHWidget: React.FC = () => {
               js.src = 'https://www.peopleperhour.com/hire/1480752533/11906506.js?width=245&height=320&orientation=vertical&theme=dark&hourlies=1053149%2C1083857&rnd='+parseInt(Math.random()*10000, 10);
               try { where.parentNode.insertBefore(js, where); } catch (e) { if (typeof console !== 'undefined' && console.log && e.stack) { console.log(e.stack); } }
           }(document, 'script'));
+          
+          // Intercept and upgrade HTTP to HTTPS for dynamically created elements
+          (function() {
+            var observer = new MutationObserver(function(mutations) {
+              mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                  if (node.nodeType === 1) { // Element node
+                    // Fix iframes
+                    if (node.tagName === 'IFRAME' && node.src && node.src.startsWith('http://')) {
+                      node.src = node.src.replace('http://', 'https://');
+                    }
+                    // Fix scripts
+                    if (node.tagName === 'SCRIPT' && node.src && node.src.startsWith('http://')) {
+                      node.src = node.src.replace('http://', 'https://');
+                    }
+                    // Check nested elements
+                    var iframes = node.querySelectorAll ? node.querySelectorAll('iframe[src^="http://"]') : [];
+                    var scripts = node.querySelectorAll ? node.querySelectorAll('script[src^="http://"]') : [];
+                    iframes.forEach(function(iframe) {
+                      iframe.src = iframe.src.replace('http://', 'https://');
+                    });
+                    scripts.forEach(function(script) {
+                      script.src = script.src.replace('http://', 'https://');
+                    });
+                  }
+                });
+              });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+          })();
         </script>
       </body>
     </html>
